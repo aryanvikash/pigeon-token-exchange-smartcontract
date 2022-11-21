@@ -15,7 +15,7 @@ contract PigeonNft is Pausable, ERC721URIStorage, Ownable {
     // List price in pgn token
     uint256 nftGasfee = 6;
     // Store Token ID and price
-    mapping(uint256 => NftToken) public listedTokens;
+    mapping(uint256 => NftToken)  listedTokens;
     //  Base URI
     string private baseURI = "https://gateway.pinata.cloud/ipfs/";
 
@@ -30,9 +30,7 @@ contract PigeonNft is Pausable, ERC721URIStorage, Ownable {
         address seller;
         uint256 price;
         string tokenURI;
-        bool forsale;
-        uint256 soldCount;
-        bool isPremium;
+        bool forSell;
     }
 
     /** Start Pause */
@@ -64,27 +62,41 @@ contract PigeonNft is Pausable, ERC721URIStorage, Ownable {
         public
         returns (uint256)
     {
-        // check paused
-        require(!paused(), "Contract is paused");
-        require(price > 0, "Price should be greater than 0");
-        // Token Minting charge (platform charge)
-        // TODO
-        require(
-            pigeonToken.balanceOf(msg.sender) >= nftGasfee,
-            "You don't have enough PGN token"
-        );
+            // check paused
+            require(!paused(), "Contract is paused");
+            require(price > 0, "Price should be greater than 0");
+            // Token Minting charge (platform charge)
+            // TODO
+            require(
+                pigeonToken.balanceOf(msg.sender) >= nftGasfee,
+                "You don't have enough PGN token"
+            );
 
-        pigeonToken.transferFrom(_msgSender(), owner(), nftGasfee);
+            pigeonToken.transferFrom(_msgSender(), owner(), nftGasfee);
 
-        _tokenIds.increment();
-        uint256 newItemId = _tokenIds.current();
-        // Add token and list for given price
-        _mint(msg.sender, newItemId);
-        _setTokenURI(newItemId, tokenURI);
-        _listNftOnMarket(newItemId, price);
+            _tokenIds.increment();
+            uint256 newItemId = _tokenIds.current();
+            // Add token and list for given price
+            _mint(msg.sender, newItemId);
+            _setTokenURI(newItemId, tokenURI);
+            _listNftOnMarket(newItemId, price);
 
-        return newItemId;
+            return newItemId;
     }
+
+    // listing price
+
+    function getListingPrice() public view returns (uint256) {
+        return nftGasfee;
+    }
+
+
+    function getListedToken(uint256 tokenId)public view returns (NftToken memory){
+        require(_exists(tokenId), "Token does not exist");
+        return listedTokens[tokenId] ;
+
+    }
+
 
     /**
     List Nft Token on market place First time
@@ -96,81 +108,33 @@ contract PigeonNft is Pausable, ERC721URIStorage, Ownable {
             msg.sender,
             price,
             tokenURI(tokenid),
-            true,
-            0,
-            false
+            true
         );
 
         approve(address(this), tokenid);
     }
 
-    // Make it visible for sale on market place
-    function SellNft(uint256 tokenid) public {
-        require(listedTokens[tokenid].forsale == false, "Already for sale");
-        require(
-            ownerOf(tokenid) == msg.sender,
-            "You are not the owner of this token"
-        );
+    function buyNft(uint256 tokenid) external {
 
-        listedTokens[tokenid].forsale = true;
-    }
+            // Check pause
+            require(!paused(), "Contract is paused");
 
-    // Make Nft Token for sale on market place with custom price
-    function SellNft(uint256 tokenid, uint256 price) public {
-        require(listedTokens[tokenid].forsale == false, "Already for sale");
-        require(
-            ownerOf(tokenid) == msg.sender,
-            "You are not the owner of this token"
-        );
-
-        if (listedTokens[tokenid].price != price) {
-            listedTokens[tokenid].price = price;
-        }
-        if (listedTokens[tokenid].forsale == false) {
-            listedTokens[tokenid].forsale = true;
-        }
-    }
-
-    function RemoveSell(uint256 tokenid) external {
-        // Remove token from list
-        require(
-            listedTokens[tokenid].forsale == true,
-            "Token is not listed for sale"
-        );
-
-        require(
-            listedTokens[tokenid].seller == msg.sender,
-            "You are not the owner of this token"
-        );
-
-        listedTokens[tokenid].forsale = false;
-    }
-
-    // override balance of
-    function balanceOf(address owner) public view override returns (uint256) {
-        return pigeonToken.balanceOf(owner);
-    }
-
-    function purchaseNft(uint256 tokenid) external {
-        // Check pause
-        require(!paused(), "Contract is paused");
-
-        // Check if token is listed for sale
-        require(
-            listedTokens[tokenid].forsale == true,
-            "Token is not for sale or sold out"
-        );
-        // Check if token is not sold
-        require(listedTokens[tokenid].price > 0, "Token is already sold out");
-        // Check if buyer has enough balance
-        require(
-            pigeonToken.balanceOf(msg.sender) >= listedTokens[tokenid].price,
-            "You don't have enough PGN token"
+            // Check if token is listed for sale
+            require(
+                listedTokens[tokenid].forSell == true,
+                "Token is not for sale or sold out"
+            );
+            // Check if token is not sold
+            require(listedTokens[tokenid].price > 0, "Token is already sold out");
+            // Check if buyer has enough balance
+            require(
+                pigeonToken.balanceOf(msg.sender) >= listedTokens[tokenid].price,
+                "You don't have enough PGN token"
         );
 
         // Transfer token to buyer
         _transfer(listedTokens[tokenid].seller, msg.sender, tokenid);
-        // Transfer token to seller
+        // Transfer token to owner
         pigeonToken.transferFrom(
             msg.sender,
             listedTokens[tokenid].seller,
@@ -179,44 +143,55 @@ contract PigeonNft is Pausable, ERC721URIStorage, Ownable {
         // Update token price
         listedTokens[tokenid].price = 0;
         // Update token sold count
-        listedTokens[tokenid].soldCount += 1;
         listedTokens[tokenid].seller = msg.sender;
     }
+
+
+    function ToggleoggleNftForSell(uint256 tokenid) public  {
+        // require(listedTokens[tokenid].forSell == false, "Already for sale");
+        require(
+            ownerOf(tokenid) == msg.sender,
+            "You are not the owner of this token"
+        );
+
+        listedTokens[tokenid].forSell = true;
+    }
+
+    // function UpdateNftPrice(uint256 tokenid, uint256 price) public {
+
+    //     require(
+    //         ownerOf(tokenid) == msg.sender,
+    //         "You are not the owner of this token"
+    //     );
+
+    //     if (listedTokens[tokenid].price != price) {
+    //         listedTokens[tokenid].price = price;
+    //     }
+    //     if (listedTokens[tokenid].forSell == false) {
+    //         listedTokens[tokenid].forSell = true;
+    //     }
+    // }
+
+
+
+    function balanceOf(address owner) public view override returns (uint256) {
+        return pigeonToken.balanceOf(owner);
+    }
+
 
     // function getNftToken(uint256 tokenid) public view returns (NftToken memory) {
     //     require(_exists(tokenid), "Token does not exist");
     //     return listedTokens[tokenid];
     // }
 
-    /** Claim a nft Which is shared by Pigeon and owned by contract */
-    function claimOpenNft(uint256 tokenid) external {
-        // Check pause
-        require(!paused(), "Contract is paused");
-
-        // Check if token is listed for sale
-        require(
-            listedTokens[tokenid].forsale == true,
-            "Token is not for sale or sold out"
-        );
-        // Check if creator is contract
-        require(
-            listedTokens[tokenid].seller == listedTokens[tokenid].creator,
-            "Token is not open for claim"
-        );
-
-        require(
-            listedTokens[tokenid].seller == address(this),
-            "Token alredy claimed"
-        );
-
-        // Transfer token to buyer
-        _transfer(listedTokens[tokenid].seller, _msgSender(), tokenid);
-    }
-
     function fetchAllNfts() public view returns (NftToken[] memory) {
         NftToken[] memory tokens = new NftToken[](_tokenIds.current());
+        uint256 index = 0;
         for (uint256 i = 0; i < _tokenIds.current(); i++) {
-            tokens[i] = listedTokens[i + 1];
+            if (listedTokens[i + 1].forSell == true) {
+                tokens[index] = listedTokens[i + 1];
+                index++;
+            }
         }
         return tokens;
     }
@@ -238,17 +213,6 @@ contract PigeonNft is Pausable, ERC721URIStorage, Ownable {
         return tokens;
     }
 
-    function fetchAllMyNfts() public view returns (NftToken[] memory) {
-        NftToken[] memory tokens = new NftToken[](_tokenIds.current());
-        uint256 count = 0;
-        for (uint256 i = 0; i < _tokenIds.current(); i++) {
-            if (listedTokens[i + 1].seller == msg.sender) {
-                tokens[count] = listedTokens[i + 1];
-                count++;
-            }
-        }
-        return tokens;
-    }
 
     function withdraw() public onlyOwner {
         payable(msg.sender).transfer(address(this).balance);
